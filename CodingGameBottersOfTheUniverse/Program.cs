@@ -168,7 +168,7 @@ namespace CodingGameBottersOfTheUniverse
 
         public IEnumerable<Action> DecideWhatToDo(HeroController controller, TurnState turn, TacticScore tacticScore)
         {
-            var backline = turn.My.Trash.FurthestBackwards(x => x.X, turn.Game.MyTeam);
+            var backline = turn.My.Trash.FurthestForwards(x => x.X, turn.Game.MyTeam);
             var trail = turn.My.Trash.First(x => x.X == backline);
             yield return () => controller.Move(trail.X, trail.Y);
         }
@@ -203,7 +203,7 @@ namespace CodingGameBottersOfTheUniverse
                 return TacticScore.DoNotUse; // Prefer flee
             }
 
-            if (turn.My.Hero.HealthPercentage < 50)
+            if (turn.My.Hero.HealthPercentage < 50 && turn.Enemy.Hero.HealthPercentage > 50)
             {
                 return new TacticScore(this, 1110, "Health less than 50%");
             }
@@ -217,16 +217,34 @@ namespace CodingGameBottersOfTheUniverse
             var trail = turn.My.Trash.First(x => x.X == backline);
 
             yield return () => controller.Move(trail.X, trail.Y);
+        }
+    }
 
+    public class HealIfPossible: ITactic
+    {
+        public TacticScore RankTactic(TurnState turn)
+        {
             var healingPotions = turn.Game.Items
                 .Where(x => x.IsPotion == 1 && x.Health > 0 && x.ItemCost <= turn.Gold)
                 .OrderByDescending(x => x.Health)
                 .ToList();
 
-            if (healingPotions.Any())
+            if (turn.My.Hero.HealthPercentage < 50 && healingPotions.Any())
             {
-                yield return () => controller.Buy(healingPotions.First().ItemName);
+                return new TacticScore(this, 1115, "Health less than 50%");
             }
+
+            return TacticScore.DoNotUse;
+        }
+
+        public IEnumerable<Action> DecideWhatToDo(HeroController controller, TurnState turn, TacticScore tacticScore)
+        {
+            var healingPotions = turn.Game.Items
+                .Where(x => x.IsPotion == 1 && x.Health > 0 && x.ItemCost <= turn.Gold)
+                .OrderByDescending(x => x.Health)
+                .ToList();
+
+            yield return () => controller.Buy(healingPotions.First().ItemName);
         }
     }
 
@@ -309,7 +327,7 @@ namespace CodingGameBottersOfTheUniverse
 
         public IEnumerable<Action> DecideWhatToDo(HeroController controller, TurnState turn, TacticScore tacticScore)
         {
-            var backline = turn.My.Trash.Min(x => x.X);
+            var backline = turn.My.Trash.FurthestForwards(x => x.X, turn.Game.MyTeam);
             var trail = turn.My.Trash.First(x => x.X == backline);
 
             yield return () => controller.Move(trail.X, trail.Y);
@@ -330,7 +348,7 @@ namespace CodingGameBottersOfTheUniverse
                 return new TacticScore(this, int.MaxValue, "Nuke hero, they're weak.");
             }
 
-            if (turn.Enemy.Hero.IsRanged && turn.Enemy.Hero.CanAttack(turn.My.Hero))
+            if (turn.Enemy.Hero.CanAttack(turn.My.Hero))
             {
                 return new TacticScore(this, 55, "Hero is ranged and can attack me, try rush him");
             }
