@@ -6,6 +6,7 @@ using System.Text;
 
 namespace CodingGameBottersOfTheUniverse
 {
+    #region gameloop
     public class Player
     {
         public static void Main(string[] args)
@@ -35,11 +36,7 @@ namespace CodingGameBottersOfTheUniverse
             }
         }
     }
-
-    public enum UnitType
-    {
-        Unit, Hero, Tower, Groot
-    }
+    #endregion
 
     public class HeroController
     {
@@ -112,7 +109,21 @@ namespace CodingGameBottersOfTheUniverse
     {
         public int RankTactic(TurnState turn)
         {
-            if (turn.Enemies.Count() < 3) return 1;
+            if (turn.EnemyHero.HealthPercentage <= 50 && turn.MyHero.HealthPercentage > 80)
+            {
+                return 1000;
+            }
+
+            if (turn.Enemies.Count() == 2 && turn.EnemyHero.HealthPercentage <= 25)
+            {
+                return 100;
+            }
+
+            if (turn.Enemies.Count() < 5)
+            {
+                return 1;
+            }
+
             return 0;
         }
 
@@ -122,10 +133,16 @@ namespace CodingGameBottersOfTheUniverse
         }
     }
 
+    #region Domain
     public interface IOutputChannel
     {
         void WriteLine(string msg);
         void Debug(string msg);
+    }
+
+    public enum UnitType
+    {
+        Unit, Hero, Tower, Groot
     }
 
     public class ConsoleOutput : IOutputChannel
@@ -235,6 +252,7 @@ namespace CodingGameBottersOfTheUniverse
         int RankTactic(TurnState turn);
         void Execute(HeroController controller, TurnState turn);
     }
+    #endregion
 
     #region Debugging
     public static class Extensions
