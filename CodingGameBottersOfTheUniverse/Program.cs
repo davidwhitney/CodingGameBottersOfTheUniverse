@@ -147,7 +147,7 @@ namespace CodingGameBottersOfTheUniverse
 
         public IEnumerable<Action> DecideWhatToDo(HeroController controller, TurnState turn, TacticScore tacticScore)
         {
-            var frontLine = turn.My.Trash.Max(x=>x.X);
+            var frontLine = turn.My.Trash.FurthestForwards(x=>x.X, turn.Game.MyTeam);
             var leader = turn.My.Trash.First(x => x.X == frontLine);
 
             yield return () => controller.Move(leader.X, leader.Y);
@@ -168,7 +168,7 @@ namespace CodingGameBottersOfTheUniverse
 
         public IEnumerable<Action> DecideWhatToDo(HeroController controller, TurnState turn, TacticScore tacticScore)
         {
-            var backline = turn.My.Trash.Min(x => x.X);
+            var backline = turn.My.Trash.FurthestBackwards(x => x.X, turn.Game.MyTeam);
             var trail = turn.My.Trash.First(x => x.X == backline);
             yield return () => controller.Move(trail.X, trail.Y);
         }
@@ -448,6 +448,15 @@ namespace CodingGameBottersOfTheUniverse
     public static class UnitColExtensions
     {
         public static UnitCollection ToUnitCollection(this IEnumerable<Unit> src) => new UnitCollection(src);
+        public static int FurthestForwards(this IEnumerable<Unit> source, Func<Unit, int> selector, int team)
+        {
+            return team == 0 ? source.Select(selector).Max() : source.Select(selector).Min();
+        }
+
+        public static int FurthestBackwards(this IEnumerable<Unit> source, Func<Unit, int> selector, int team)
+        {
+            return team == 0 ? source.Select(selector).Min() : source.Select(selector).Max();
+        }
     }
 
     public class Unit : WorldObject
