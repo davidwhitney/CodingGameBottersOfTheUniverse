@@ -147,8 +147,8 @@ namespace CodingGameBottersOfTheUniverse
 
         public IEnumerable<Action> DecideWhatToDo(HeroController controller, TurnState turn, TacticScore tacticScore)
         {
-            var frontLine = turn.My.Trash.FurthestForwards(x=>x.X, turn.Game.MyTeam);
-            var leader = turn.My.Trash.First(x => x.X == frontLine);
+            var frontLine = turn.My.Trash.FurthestForwards(x => x.X, turn.Game.MyTeam);
+            var leader = turn.My.Trash.FirstOrDefault(x => x.X == frontLine) ?? turn.My.Tower;
 
             yield return () => controller.Move(leader.X, leader.Y);
         }
@@ -169,7 +169,7 @@ namespace CodingGameBottersOfTheUniverse
         public IEnumerable<Action> DecideWhatToDo(HeroController controller, TurnState turn, TacticScore tacticScore)
         {
             var backline = turn.My.Trash.FurthestForwards(x => x.X, turn.Game.MyTeam);
-            var trail = turn.My.Trash.First(x => x.X == backline);
+            var trail = turn.My.Trash.FirstOrDefault(x => x.X == backline) ?? turn.My.Tower;
             yield return () => controller.Move(trail.X, trail.Y);
         }
     }
@@ -259,7 +259,7 @@ namespace CodingGameBottersOfTheUniverse
 
             if (myVunerableUnits.Count > 0)
             {
-                return new TacticScore(this, 200, "Vunerable units within reach - murder them to deny gold");
+                return new TacticScore(this, 1501, "Vunerable units within reach - murder them to deny gold");
             }
 
             return TacticScore.DoNotUse;
@@ -328,7 +328,7 @@ namespace CodingGameBottersOfTheUniverse
         public IEnumerable<Action> DecideWhatToDo(HeroController controller, TurnState turn, TacticScore tacticScore)
         {
             var backline = turn.My.Trash.FurthestForwards(x => x.X, turn.Game.MyTeam);
-            var trail = turn.My.Trash.First(x => x.X == backline);
+            var trail = turn.My.Trash.FirstOrDefault(x => x.X == backline) ?? turn.My.Tower;
 
             yield return () => controller.Move(trail.X, trail.Y);
         }
