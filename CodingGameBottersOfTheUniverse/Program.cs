@@ -1,6 +1,8 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 
 namespace CodingGameBottersOfTheUniverse
 {
@@ -8,24 +10,272 @@ namespace CodingGameBottersOfTheUniverse
     {
         public static void Main(string[] args)
         {
-            var gameState = GetGameState();
+            var outputChannel = new ConsoleOutput();
+            var allTactics = typeof(ITactic).Assembly.GetTypes()
+                .Where(t => t.GetInterfaces().Contains(typeof(ITactic)))
+                .Select(Activator.CreateInstance)
+                .Cast<ITactic>()
+                .ToList();
+
+            var hero = new HeroController(HeroType.Hulk, allTactics, outputChannel);
+
+            var game = InputParser.GetGameState();
             
             while (true)
             {
-                var turnState = GetTurnState();
-
-                // Write an action using Console.WriteLine()
-                // To debug: Console.Error.WriteLine("Debug messages...");
-
-
-                // If roundType has a negative value then you need to output a Hero name, such as "DEADPOOL" or "VALKYRIE".
-                // Else you need to output roundType number of any valid action, such as "WAIT" or "ATTACK unitId"
-                Console.WriteLine("WAIT");
+                var turn = InputParser.GetTurnState(game);
+                if (turn.InitilisationRound)
+                {
+                    hero.Spawn();
+                    continue;
+                }
+                
+                hero.Unit = turn.MyHero;
+                hero.ExecuteTactics(turn);
             }
         }
+    }
 
-        #region Parsing
-        private static TurnState GetTurnState()
+    public enum UnitType
+    {
+        Unit, Hero, Tower, Groot
+    }
+
+    public class HeroController
+    {
+        public Unit Unit { get; set; }
+        public List<ITactic> Tactics { get; set; }
+
+        private readonly HeroType _heroType;
+        private readonly IOutputChannel _output;
+        
+        public HeroController(HeroType heroType, List<ITactic> tactics, IOutputChannel output)
+        {
+            _heroType = heroType;
+            _output = output;
+            Tactics = tactics;
+        }
+
+        public ITactic SelectTactic(TurnState turn)
+        {
+            return Tactics.OrderBy(x => x.RankTactic(turn)).First();
+        }
+
+        public void ExecuteTactics(TurnState turn)
+        {
+            SelectTactic(turn).Execute(this, turn);
+        }
+
+        public void Spawn() => _output.WriteLine(_heroType.ToString().ToUpper());
+        public void Wait() => _output.WriteLine("WAIT");
+        public void Move(int x, int y) => _output.WriteLine($"MOVE {x} {y}");
+        public void MoveAttack(int x, int y, int unitId) => _output.WriteLine($"MOVE_ATTACK {x} {y} {unitId}");
+        public void MoveAttack(int x, int y, Unit unit) => _output.WriteLine($"MOVE_ATTACK {x} {y} {unit.Id}");
+        public void Attack(int unitId) => _output.WriteLine($"ATTACK {unitId}");
+        public void Attack(Unit unit) => _output.WriteLine($"ATTACK {unit.Id}");
+        public void AttackNearest(string unitType) => _output.WriteLine($"ATTACK_NEAREST {unitType}");
+        public int TimeToMove(int distance) => distance / Unit.MovementSpeed;
+
+    }
+
+    public class EvadeHeroWhenWeak : ITactic
+    {
+        public int RankTactic(TurnState turn)
+        {
+            if (turn.MyHero.Health < 25)
+            {
+                
+            }
+            return 1;
+        }
+
+        public void Execute(HeroController controller, TurnState turn)
+        {
+            controller.AttackNearest("UNIT");
+        }
+    }
+
+    public class OnlyAttackTrashMobs : ITactic
+    {
+        public int RankTactic(TurnState turn)
+        {
+            return 1;
+        }
+
+        public void Execute(HeroController controller, TurnState turn)
+        {
+            controller.AttackNearest("UNIT");
+        }
+    }
+
+    public class AttackHero : ITactic
+    {
+        public int RankTactic(TurnState turn)
+        {
+            if (turn.Enemies.Count() < 3) return 1;
+            return 0;
+        }
+
+        public void Execute(HeroController controller, TurnState turn)
+        {
+            controller.AttackNearest("HERO");
+        }
+    }
+
+    public interface IOutputChannel
+    {
+        void WriteLine(string msg);
+        void Debug(string msg);
+    }
+
+    public class ConsoleOutput : IOutputChannel
+    {
+        public void WriteLine(string msg)
+        {
+            Console.WriteLine(msg);
+        }
+
+        public void Debug(string msg)
+        {
+            Console.Error.WriteLine(msg);
+        }
+    }
+
+    public enum HeroType
+    {
+        Deadpool, Doctor_Strange, Hulk, Ironman, Valkrie
+    }
+
+    public class GameState
+    {
+        public int MyTeam { get; set; }
+        public List<Entity> Entities { get; set; } = new List<Entity>();
+        public List<Item> Items { get; set; } = new List<Item>();
+    }
+
+    public class TurnState
+    {
+        public GameState Game { get; set; }
+        public int EntityCount { get; set; }
+        public int Gold { get; set; }
+        public int EnemyGold { get; set; }
+        public int RoundType { get; set; }
+        public List<Unit> Units { get; set; } = new List<Unit>();
+        public bool InitilisationRound => RoundType < 0;
+        public int NumberOfHerosToOrder => RoundType;
+        public IEnumerable<Unit> Enemies => Units.Where(x => x.Team != Game.MyTeam);
+        public IEnumerable<Unit> MyUnits => Units.Where(x => x.Team == Game.MyTeam);
+        public Unit MyHero => MyUnits.SingleOrDefault(x => x.UnitType == UnitType.Hero);
+        public Unit EnemyHero => Enemies.SingleOrDefault(x => x.UnitType == UnitType.Hero);
+
+        public override string ToString() => this.ToDebugString();
+    }
+
+    public class Unit : WorldObject
+    {
+        public int Id { get; set; }
+        public int Team { get; set; }
+        public UnitType UnitType { get; set; }
+        public int AttackRange { get; set; }
+        public int Health { get; set; }
+        public int MaxHealth { get; set; }
+        public int Shield { get; set; }
+        public int AttackDamage { get; set; }
+        public int MovementSpeed { get; set; }
+        public int StunDuration { get; set; }
+        public int GoldValue { get; set; }
+        public int CountDown1 { get; set; }
+        public int CountDown2 { get; set; }
+        public int CountDown3 { get; set; }
+        public int Mana { get; set; }
+        public int MaxMana { get; set; }
+        public int ManaRegeneration { get; set; }
+        public string HeroType { get; set; }
+        public int IsVisible { get; set; }
+        public int ItemsOwned { get; set; }
+
+        public int HealthPercentage => (Health / MaxHealth) * 100;
+
+        public bool InAttackRange(Unit other)
+        {
+            return false;   
+        }
+
+        public override string ToString() => this.ToDebugString();
+    }
+
+    public class Item
+    {
+        public string ItemName { get; set; }
+        public int ItemCost { get; set; }
+        public int Damage { get; set; }
+        public int Health { get; set; }
+        public int MaxHealth { get; set; }
+        public int Mana { get; set; }
+        public int MaxMana { get; set; }
+        public int MoveSpeed { get; set; }
+        public int ManaRegeneration { get; set; }
+        public int IsPotion { get; set; }
+    }
+
+    public class Entity : WorldObject
+    {
+        public string EntityType { get; set; }
+        public int Radius { get; set; }
+    }
+
+    public class WorldObject
+    {
+        public int X { get; set; }
+        public int Y { get; set; }
+    }
+
+    public interface ITactic
+    {
+        int RankTactic(TurnState turn);
+        void Execute(HeroController controller, TurnState turn);
+    }
+
+    #region Debugging
+    public static class Extensions
+    {
+        public static string ToDebugString(this object src)
+        {
+            var builder = new StringBuilder(src.GetType().Name + ": {");
+            foreach (var prop in src.GetType().GetProperties())
+            {
+                if (prop.PropertyType == typeof(CollectionBase))
+                {
+                    var value = (CollectionBase)prop.GetValue(src);
+                    foreach (var item in value)
+                    {
+                        builder.AppendLine(item.ToDebugString());
+                    }
+                }
+                else
+                {
+                    try
+                    {
+                        builder.AppendLine(prop.Name + ":" + prop.GetValue(src));
+                    }
+                    catch (Exception ex)
+                    {
+                        builder.AppendLine(prop.Name + ":" + ex.Message);
+                    }
+                }
+            }
+            builder.AppendLine("}");
+            return builder.ToString();
+
+        }
+    }
+    #endregion
+    
+    #region Parsing
+    public static class InputParser
+    {
+
+        public static TurnState GetTurnState(GameState game)
         {
             var turnState = new TurnState
             {
@@ -40,9 +290,9 @@ namespace CodingGameBottersOfTheUniverse
                 var turnInput = Console.ReadLine().Split(' ').ToList();
                 turnState.Units.Add(new Unit
                 {
-                    UnitId = int.Parse(turnInput[0]),
+                    Id = int.Parse(turnInput[0]),
                     Team = int.Parse(turnInput[1]),
-                    UnitType = turnInput[2], // UNIT, HERO, TOWER, can also be GROOT from wood1
+                    UnitType = (UnitType)Enum.Parse(typeof(UnitType), turnInput[2], true), // UNIT, HERO, TOWER, can also be GROOT from wood1
                     X = int.Parse(turnInput[3]),
                     Y = int.Parse(turnInput[4]),
                     AttackRange = int.Parse(turnInput[5]),
@@ -64,10 +314,11 @@ namespace CodingGameBottersOfTheUniverse
                     ItemsOwned = int.Parse(turnInput[21]), // useful from wood1
                 });
             }
+            turnState.Game = game;
             return turnState;
         }
 
-        private static GameState GetGameState()
+        public static GameState GetGameState()
         {
             List<string> inputs;
             var state = new GameState
@@ -108,70 +359,7 @@ namespace CodingGameBottersOfTheUniverse
             }
             return state;
         }
-        #endregion
     }
+    #endregion
 
-    public class GameState
-    {
-        public int MyTeam { get; set; }
-        public List<Entity> Entities { get; set; } = new List<Entity>();
-        public List<Item> Items { get; set; } = new List<Item>();
-    }
-
-    public class TurnState
-    {
-        public int EntityCount { get; set; }
-        public int Gold { get; set; }
-        public int EnemyGold { get; set; }
-        public int RoundType { get; set; }
-        public List<Unit> Units { get; set; } = new List<Unit>();
-    }
-
-    public class Unit
-    {
-        public int UnitId { get; set; }
-        public int Team { get; set; }
-        public string UnitType { get; set; }
-        public int X { get; set; }
-        public int Y { get; set; }
-        public int AttackRange { get; set; }
-        public int Health { get; set; }
-        public int MaxHealth { get; set; }
-        public int Shield { get; set; }
-        public int AttackDamage { get; set; }
-        public int MovementSpeed { get; set; }
-        public int StunDuration { get; set; }
-        public int GoldValue { get; set; }
-        public int CountDown1 { get; set; }
-        public int CountDown2 { get; set; }
-        public int CountDown3 { get; set; }
-        public int Mana { get; set; }
-        public int MaxMana { get; set; }
-        public int ManaRegeneration { get; set; }
-        public string HeroType { get; set; }
-        public int IsVisible { get; set; }
-        public int ItemsOwned { get; set; }
-    }
-
-    public class Item
-    {
-        public string ItemName { get; set; }
-        public int ItemCost { get; set; }
-        public int Damage { get; set; }
-        public int Health { get; set; }
-        public int MaxHealth { get; set; }
-        public int Mana { get; set; }
-        public int MaxMana { get; set; }
-        public int MoveSpeed { get; set; }
-        public int ManaRegeneration { get; set; }
-        public int IsPotion { get; set; }
-    }
-
-    public class Entity
-    {
-        public string EntityType { get; set; }
-        public int X { get; set; }
-        public int Y { get; set; }
-        public int Radius { get; set; }
-    }
 }
