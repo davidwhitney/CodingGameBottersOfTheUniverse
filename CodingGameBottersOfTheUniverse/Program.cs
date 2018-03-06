@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Text;
 
 namespace CodingGameBottersOfTheUniverse
@@ -55,11 +56,20 @@ namespace CodingGameBottersOfTheUniverse
 
         public ITactic SelectTactic(TurnState turn)
         {
-            return Tactics.OrderBy(x => x.RankTactic(turn)).First();
+            var ranked = Tactics.OrderByDescending(x => x.RankTactic(turn)).ToList();
+
+            foreach (var tactic in ranked)
+            {
+                _output.Debug(tactic.GetType().Name + ": " + tactic.RankTactic(turn));
+            }
+
+            return ranked.First();
         }
 
         public void ExecuteTactics(TurnState turn)
         {
+            _output.Debug(Unit.ToDebugString());
+
             SelectTactic(turn).Execute(this, turn);
         }
 
@@ -79,16 +89,18 @@ namespace CodingGameBottersOfTheUniverse
     {
         public int RankTactic(TurnState turn)
         {
-            if (turn.MyHero.Health < 25)
+            if (turn.MyHero.HealthPercentage < 10)
             {
-                
+                return 150;
             }
-            return 1;
+            return 0;
         }
 
         public void Execute(HeroController controller, TurnState turn)
         {
-            controller.AttackNearest("UNIT");
+            var tower = turn.MyUnits.First(u => u.UnitType == UnitType.Tower);
+
+            controller.Move(tower.X, tower.Y);
         }
     }
 
@@ -96,7 +108,7 @@ namespace CodingGameBottersOfTheUniverse
     {
         public int RankTactic(TurnState turn)
         {
-            return 1;
+            return 50;
         }
 
         public void Execute(HeroController controller, TurnState turn)
@@ -121,7 +133,7 @@ namespace CodingGameBottersOfTheUniverse
 
             if (turn.Enemies.Count() < 5)
             {
-                return 1;
+                return 50;
             }
 
             return 0;
@@ -211,7 +223,7 @@ namespace CodingGameBottersOfTheUniverse
         public int IsVisible { get; set; }
         public int ItemsOwned { get; set; }
 
-        public int HealthPercentage => (Health / MaxHealth) * 100;
+        public int HealthPercentage => (int)(((double)Health / (double)MaxHealth) * 100);
 
         public bool InAttackRange(Unit other)
         {
