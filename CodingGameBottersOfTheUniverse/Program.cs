@@ -290,6 +290,32 @@ namespace CodingGameBottersOfTheUniverse
         }
     }
 
+    public class AvoidBeingKited : ITactic
+    {
+        public TacticScore RankTactic(TurnState turn)
+        {
+            var backOfMyPackX = turn.My.Trash.Min(x => x.X);
+            var distanceFromPack = Math.Abs(turn.My.Hero.X - backOfMyPackX);
+
+            if (turn.Enemy.Hero.IsRanged 
+                && turn.Enemy.Hero.CanAttack(turn.My.Hero)
+                && distanceFromPack > (turn.My.Hero.MovementSpeed * 6))
+            {
+                return new TacticScore(this, 56, "I think I'm being kited, let's not do that.");
+            }
+
+            return TacticScore.DoNotUse;
+        }
+
+        public IEnumerable<Action> DecideWhatToDo(HeroController controller, TurnState turn, TacticScore tacticScore)
+        {
+            var backline = turn.My.Trash.Min(x => x.X);
+            var trail = turn.My.Trash.First(x => x.X == backline);
+
+            yield return () => controller.Move(trail.X, trail.Y);
+        }
+    }
+
     public class AttackHero : ITactic
     {
         public TacticScore RankTactic(TurnState turn)
