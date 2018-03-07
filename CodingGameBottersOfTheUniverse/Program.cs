@@ -145,11 +145,14 @@ namespace CodingGameBottersOfTheUniverse
                 return TacticScore.DoNotUse;
             }
 
-            var frontLine = turn.My.Trash.FurthestForwards(x => x.X, turn.Game.MyTeam);
-            var leader = turn.My.Trash.FirstOrDefault(x => x.X == frontLine) ?? turn.My.Tower;
-            if (turn.My.Hero.NearTo(leader))
+            if (turn.My.Trash.Any())
             {
-                return TacticScore.DoNotUse;
+                var frontLine = turn.My.Trash.FurthestForwards(x => x.X, turn.Game.MyTeam);
+                var leader = turn.My.Trash.FirstOrDefault(x => x.X == frontLine) ?? turn.My.Tower;
+                if (turn.My.Hero.NearTo(leader))
+                {
+                    return TacticScore.DoNotUse;
+                }
             }
 
             if (!turn.Enemy.UnitsInRangeOf(turn.My.Hero).Any())
