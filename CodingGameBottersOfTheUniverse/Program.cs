@@ -325,6 +325,26 @@ namespace CodingGameBottersOfTheUniverse
     }
 
 
+    public class TargetCheapHacks : IStrategy
+    {
+        public TacticScore RankTactic(TurnState turn)
+        {
+            var distanceY = Math.Abs(turn.Enemy.Hero.Y - turn.My.Hero.Y);
+            if (distanceY > 100)
+            {
+                return new TacticScore(this, 3000, "Hero is hiding, let's go kill them");
+            }
+
+            return TacticScore.DoNotUse;
+        }
+
+        public IEnumerable<Action> RetrieveActions(HeroController controller, TurnState turn, TacticScore tacticScore)
+        {
+            yield return () => controller.Attack(turn.Enemy.Hero, "You can't hide from me");
+        }
+    }
+
+
     public class AttackNearbyEnemiesBasedOnThreat : IStrategy
     {
         public TacticScore RankTactic(TurnState turn)
