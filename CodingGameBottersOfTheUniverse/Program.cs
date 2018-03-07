@@ -84,10 +84,6 @@ namespace CodingGameBottersOfTheUniverse
             {
                 ActionBuffer.Dequeue()();
             }
-            else
-            {
-                Wait();
-            }
         }
 
         public void Spawn() => RawWrite(_heroType.ToString().ToUpper());
@@ -106,14 +102,14 @@ namespace CodingGameBottersOfTheUniverse
             => _output.WriteLine(!string.IsNullOrWhiteSpace(customMessage) ? string.Join(";", command, customMessage) : command);
     }
 
-    public class BuffHealthIfMelee : IStrategy
+    public class PurchaseMeleeDamageBuffs : IStrategy
     {
         public TacticScore RankTactic(TurnState turn)
         {
-            var healthBuff = turn.Game.Items.Where(x => x.IsPotion == 0 && x.Health > 0 && x.ItemCost <= turn.Gold).ToList();
+            var healthBuff = turn.Game.Items.Where(x => x.IsPotion == 0 && x.Damage > 0 && x.ItemCost <= turn.Gold).ToList();
             if (healthBuff.Any() && turn.My.Hero.ItemsOwned == 0)
             {
-                return new TacticScore(this, 2000, "Health buff availabile, buying.");
+                return new TacticScore(this, 2000, "DMG buff availabile, buying.");
             }
 
             return TacticScore.DoNotUse;
@@ -122,7 +118,7 @@ namespace CodingGameBottersOfTheUniverse
         public IEnumerable<Action> RetrieveActions(HeroController controller, TurnState turn, TacticScore tacticScore)
         {
             var healingBuff = turn.Game.Items
-                .Where(x => x.IsPotion == 0 && x.Health > 0 && x.ItemCost <= turn.Gold)
+                .Where(x => x.IsPotion == 0 && x.Damage > 0 && x.ItemCost <= turn.Gold)
                 .OrderByDescending(x => x.Health)
                 .ToList();
 
@@ -149,6 +145,13 @@ namespace CodingGameBottersOfTheUniverse
                 return TacticScore.DoNotUse;
             }
 
+            var frontLine = turn.My.Trash.FurthestForwards(x => x.X, turn.Game.MyTeam);
+            var leader = turn.My.Trash.FirstOrDefault(x => x.X == frontLine) ?? turn.My.Tower;
+            if (turn.My.Hero.NearTo(leader))
+            {
+                return TacticScore.DoNotUse;
+            }
+
             if (!turn.Enemy.UnitsInRangeOf(turn.My.Hero).Any())
             {
                 return new TacticScore(this, 1500, "Nothing in range, moving with front line.");
@@ -162,27 +165,10 @@ namespace CodingGameBottersOfTheUniverse
             var frontLine = turn.My.Trash.FurthestForwards(x => x.X, turn.Game.MyTeam);
             var leader = turn.My.Trash.FirstOrDefault(x => x.X == frontLine) ?? turn.My.Tower;
 
-            yield return () => controller.Move(leader.X, leader.Y, "March!");
-        }
-    }
+            var buffer = 5;
+            buffer *= turn.Game.MyTeam == 0 ? 1 : -1;
 
-    public class IgnoreCampersIfMelee : IStrategy
-    {
-        public TacticScore RankTactic(TurnState turn)
-        {
-            var pool = turn.Enemy.Except(turn.Enemy.UnitsInRangeOf(turn.Enemy.Tower));
-
-            if (turn.Enemy.Hero.NearTo(turn.Enemy.Tower) && !turn.Enemy.Hero.IsRanged && !pool.Any())
-            {
-                return new TacticScore(this, 54, "Enemy is camping, avoid the tower.");
-            }
-
-            return TacticScore.DoNotUse;
-        }
-
-        public IEnumerable<Action> RetrieveActions(HeroController controller, TurnState turn, TacticScore tacticScore)
-        {
-            yield return () => controller.AttackNearest("HERO");
+            yield return () => controller.Move(leader.X + buffer, leader.Y, "March!");
         }
     }
 
@@ -200,9 +186,7 @@ namespace CodingGameBottersOfTheUniverse
 
         public IEnumerable<Action> RetrieveActions(HeroController controller, TurnState turn, TacticScore tacticScore)
         {
-            var tower = turn.My.First(u => u.UnitType == UnitType.Tower);
-
-            yield return () => controller.Move(tower.X, tower.Y, "Ouch!");
+            yield return () => controller.Move(turn.My.Tower.X, turn.My.Tower.Y, "Ouch!");
         }
     }
 
@@ -217,7 +201,7 @@ namespace CodingGameBottersOfTheUniverse
 
             if (turn.My.Hero.HealthPercentage < 50 && healingPotions.Any())
             {
-                return new TacticScore(this, 1115, "Health less than 50%");
+                return new TacticScore(this, 2500, "Health less than 50%");
             }
 
             return TacticScore.DoNotUse;
@@ -263,7 +247,7 @@ namespace CodingGameBottersOfTheUniverse
         }
     }
 
-    public class HideInTowerWhenICantDecidedWhatToDo : IStrategy
+    public class LashOutWhenConfused : IStrategy
     {
         public TacticScore RankTactic(TurnState turn)
         {
@@ -272,14 +256,7 @@ namespace CodingGameBottersOfTheUniverse
 
         public IEnumerable<Action> RetrieveActions(HeroController controller, TurnState turn, TacticScore tacticScore)
         {
-            if (turn.My.Tower.X != turn.My.Hero.X || turn.My.Tower.Y != turn.My.Hero.Y)
-            {
-                yield return () => controller.Move(turn.My.Tower.X, turn.My.Tower.Y);
-            }
-            else
-            {
-                yield return controller.Wait;
-            }
+            yield return () => controller.AttackNearest("UNIT");
         }
     }
 
@@ -303,11 +280,61 @@ namespace CodingGameBottersOfTheUniverse
     }
 
 
+    public class RetreatIfIBecomeLeader : IStrategy
+    {
+        public TacticScore RankTactic(TurnState turn)
+        {
+            var myTrash = turn.My.Trash;
+            var inFrontOfAll = myTrash.All(t => turn.My.Hero.IsInFrontOf(t, turn.Game.MyTeam));
+
+            if (inFrontOfAll)
+            {
+                return new TacticScore(this, 1700, "Hero became the leader. Oops.");
+            }
+
+            return TacticScore.DoNotUse;
+        }
+
+        public IEnumerable<Action> RetrieveActions(HeroController controller, TurnState turn, TacticScore tacticScore)
+        {
+            yield return () => controller.Move(turn.My.Tower.X, turn.My.Hero.Y, "Cover me!");
+        }
+    }
+
+    public class KeepAtRange : IStrategy
+    {
+        public TacticScore RankTactic(TurnState turn)
+        {
+            if (turn.My.Hero.IsRanged && turn.My.Hero.AttackRange > turn.Enemy.Hero.AttackRange)
+            {
+                if (turn.My.Hero.DistanceFrom(turn.Enemy.Hero) <= turn.Enemy.Hero.AttackRange)
+                {
+                    return new TacticScore(this, 1700, "Move to out-range the hero.");
+                }
+            }
+
+            return TacticScore.DoNotUse;
+        }
+
+        public IEnumerable<Action> RetrieveActions(HeroController controller, TurnState turn, TacticScore tacticScore)
+        {
+            var targetX = (turn.My.Hero.AttackRange - 1) + turn.Enemy.Hero.X;
+            var targetY = (turn.My.Hero.AttackRange - 1) + turn.Enemy.Hero.Y;
+            yield return () => controller.Move(targetX, targetY, "Back off baby");
+        }
+    }
+
+
     public class AttackNearbyEnemiesBasedOnThreat : IStrategy
     {
         public TacticScore RankTactic(TurnState turn)
         {
             if (turn.My.Hero.HealthPercentage < 20)
+            {
+                return TacticScore.DoNotUse;
+            }
+
+            if (turn.My.Hero.CanAttack(turn.Enemy.Hero))
             {
                 return TacticScore.DoNotUse;
             }
@@ -332,7 +359,7 @@ namespace CodingGameBottersOfTheUniverse
                 var keyValuePair = sorted.Last();
                 var unit = keyValuePair.Key;
 
-                yield return () => controller.Attack(unit, "I see you.");
+                yield return () => controller.Attack(unit, "Smackdown.");
             }
             else
             {
@@ -341,53 +368,16 @@ namespace CodingGameBottersOfTheUniverse
         }
     }
 
-    public class AvoidBeingKited : IStrategy
-    {
-        public TacticScore RankTactic(TurnState turn)
-        {
-            if (!turn.My.Trash.Any())
-            {
-                return TacticScore.DoNotUse;
-            }
-
-            var backOfMyPackX = turn.My.Trash.Min(x => x.X);
-            var distanceFromPack = Math.Abs(turn.My.Hero.X - backOfMyPackX);
-
-            if (turn.Enemy.Hero.IsRanged 
-                && turn.Enemy.Hero.CanAttack(turn.My.Hero)
-                && distanceFromPack > (turn.My.Hero.MovementSpeed * 4))
-            {
-                return new TacticScore(this, 56, "I think I'm being kited, let's not do that.");
-            }
-
-            return TacticScore.DoNotUse;
-        }
-
-        public IEnumerable<Action> RetrieveActions(HeroController controller, TurnState turn, TacticScore tacticScore)
-        {
-            var backline = turn.My.Trash.FurthestBackwards(x => x.X, turn.Game.MyTeam);
-            var trail = turn.My.Trash.FirstOrDefault(x => x.X == backline) ?? turn.My.Tower;
-
-            yield return () => controller.Move(trail.X, trail.Y, "Nice try, you come here.");
-        }
-    }
-
     public class AttackHero : IStrategy
     {
         public TacticScore RankTactic(TurnState turn)
         {
-            if (turn.Enemy.Tower.CanAttack(turn.My.Hero) && turn.Enemy.Hero.HealthPercentage > 30)
-            {
-                return TacticScore.DoNotUse; // Prefer tower attack when being t on.
-            }
-
             if (turn.Enemy.Hero.HealthPercentage <= 20)
             {
                 return new TacticScore(this, int.MaxValue, "Nuke hero, they're weak.");
             }
 
-            if (turn.Enemy.Hero.CanAttack(turn.My.Hero) 
-                && turn.My.Hero.HealthPercentage > 80)
+            if (turn.Enemy.Hero.CanAttack(turn.My.Hero))
             {
                 return new TacticScore(this, 55, "Hero is ranged and can attack me, try rush him");
             }
@@ -563,6 +553,23 @@ namespace CodingGameBottersOfTheUniverse
 
             if (x >= smallestX && x <= largestX
                 && y >= smallestY && y <= largestY)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        public bool IsInFrontOf(Unit other, int team) => IsInFrontOf(other.X, other.Y, team);
+
+        public bool IsInFrontOf(int x, int y, int team)
+        {
+            if (team == 0 && this.X >= x)
+            {
+                return true;
+            }
+
+            if (team == 1 && this.X <= x)
             {
                 return true;
             }
