@@ -101,326 +101,7 @@ namespace CodingGameBottersOfTheUniverse
         private void RawWrite(string command, string customMessage = null)
             => _output.WriteLine(!string.IsNullOrWhiteSpace(customMessage) ? string.Join(";", command, customMessage) : command);
     }
-
-    public class PurchaseMeleeDamageBuffs : IStrategy
-    {
-        public TacticScore RankTactic(TurnState turn)
-        {
-            var healthBuff = turn.Game.Items.Where(x => x.IsPotion == 0 && x.Damage > 0 && x.ItemCost <= turn.Gold).ToList();
-            if (healthBuff.Any() && turn.My.Hero.ItemsOwned == 0)
-            {
-                return new TacticScore(this, 2000, "DMG buff availabile, buying.");
-            }
-
-            return TacticScore.DoNotUse;
-        }
-
-        public IEnumerable<Action> RetrieveActions(HeroController controller, TurnState turn, TacticScore tacticScore)
-        {
-            var healingBuff = turn.Game.Items
-                .Where(x => x.IsPotion == 0 && x.Damage > 0 && x.ItemCost <= turn.Gold)
-                .OrderByDescending(x => x.Health)
-                .ToList();
-
-            foreach (var item in healingBuff)
-            {
-                yield return () => controller.Buy(item.ItemName, "Ho ho ho.");
-            }
-        }
-    }
-
-
-    public class MoveWithFrontLine : IStrategy
-    {
-        public TacticScore RankTactic(TurnState turn)
-        {
-            if (turn.My.Hero.HealthPercentage < 5)
-            {
-                return TacticScore.DoNotUse;
-            }
-
-            var frontLineNearTower = turn.My.Trash.UnitsInRangeOf(turn.Enemy.Tower).Any();
-            if (frontLineNearTower && turn.My.Hero.IsMelee)
-            {
-                return TacticScore.DoNotUse;
-            }
-
-            if (turn.My.Trash.Any())
-            {
-                var frontLine = turn.My.Trash.FurthestForwards(x => x.X, turn.Game.MyTeam);
-                var leader = turn.My.Trash.FirstOrDefault(x => x.X == frontLine) ?? turn.My.Tower;
-                if (turn.My.Hero.NearTo(leader))
-                {
-                    return TacticScore.DoNotUse;
-                }
-            }
-
-            if (!turn.Enemy.UnitsInRangeOf(turn.My.Hero).Any())
-            {
-                return new TacticScore(this, 1500, "Nothing in range, moving with front line.");
-            }
-
-            return TacticScore.DoNotUse;
-        }
-
-        public IEnumerable<Action> RetrieveActions(HeroController controller, TurnState turn, TacticScore tacticScore)
-        {
-            var frontLine = turn.My.Trash.FurthestForwards(x => x.X, turn.Game.MyTeam);
-            var leader = turn.My.Trash.FirstOrDefault(x => x.X == frontLine) ?? turn.My.Tower;
-
-            var buffer = 5;
-            buffer *= turn.Game.MyTeam == 0 ? 1 : -1;
-
-            yield return () => controller.Move(leader.X + buffer, leader.Y, "March!");
-        }
-    }
-
-    public class FleeWhenWeak : IStrategy
-    {
-        public TacticScore RankTactic(TurnState turn)
-        {
-            if (turn.My.Hero.HealthPercentage < 20 && !turn.My.Hero.NearTo(turn.My.Tower))
-            {
-                return new TacticScore(this, 1100, "Health less than 20%");
-            }
-
-            return TacticScore.DoNotUse;
-        }
-
-        public IEnumerable<Action> RetrieveActions(HeroController controller, TurnState turn, TacticScore tacticScore)
-        {
-            yield return () => controller.Move(turn.My.Tower.X, turn.My.Tower.Y, "Ouch!");
-        }
-    }
-
-    public class HealIfPossible: IStrategy
-    {
-        public TacticScore RankTactic(TurnState turn)
-        {
-            var healingPotions = turn.Game.Items
-                .Where(x => x.IsPotion == 1 && x.Health > 0 && x.ItemCost <= turn.Gold)
-                .OrderByDescending(x => x.Health)
-                .ToList();
-
-            if (turn.My.Hero.HealthPercentage < 50 && healingPotions.Any())
-            {
-                return new TacticScore(this, 2500, "Health less than 50%");
-            }
-
-            return TacticScore.DoNotUse;
-        }
-
-        public IEnumerable<Action> RetrieveActions(HeroController controller, TurnState turn, TacticScore tacticScore)
-        {
-            var healingPotions = turn.Game.Items
-                .Where(x => x.IsPotion == 1 && x.Health > 0 && x.ItemCost <= turn.Gold)
-                .OrderByDescending(x => x.Health)
-                .ToList();
-
-            yield return () => controller.Buy(healingPotions.First().ItemName, "Ahh that's better. Come on!");
-        }
-    }
-
-    public class DenyNearbyUnits : IStrategy
-    {
-        public TacticScore RankTactic(TurnState turn)
-        {
-            var myVunerableUnits =
-                turn.My.Trash.UnitsInRangeOf(turn.My.Hero)
-                    .Where(u => u.Health <= turn.My.Hero.AttackDamage)
-                    .ToUnitCollection();
-
-            if (myVunerableUnits.Count > 0)
-            {
-                return new TacticScore(this, 1501, "Vunerable units within reach - murder them to deny gold");
-            }
-
-            return TacticScore.DoNotUse;
-        }
-
-        public IEnumerable<Action> RetrieveActions(HeroController controller, TurnState turn, TacticScore tacticScore)
-        {
-            var myVunerableUnits =
-                turn.My.UnitsInRangeOf(turn.My.Hero)
-                    .Where(u => u.Health <= turn.My.Hero.AttackDamage)
-                    .OrderBy(u => u.Health)
-                    .ToUnitCollection();
-
-            yield return () => controller.Attack(myVunerableUnits.First(), "No You Don't");
-        }
-    }
-
-    public class LashOutWhenConfused : IStrategy
-    {
-        public TacticScore RankTactic(TurnState turn)
-        {
-            return new TacticScore(this, 1, "I'm scared.");
-        }
-
-        public IEnumerable<Action> RetrieveActions(HeroController controller, TurnState turn, TacticScore tacticScore)
-        {
-            yield return () => controller.AttackNearest("UNIT");
-        }
-    }
-
-    public class AttackHeroNearTowerOnlyOnceEveryoneIsDead : IStrategy
-    {
-        public TacticScore RankTactic(TurnState turn)
-        {
-            if (turn.Enemy.Tower.NearTo(turn.My.Hero)
-                && !turn.Enemy.Trash.Any())
-            {
-                return new TacticScore(this, 1225, "Kamakazi!");
-            }
-
-            return TacticScore.DoNotUse;
-        }
-
-        public IEnumerable<Action> RetrieveActions(HeroController controller, TurnState turn, TacticScore tacticScore)
-        {
-            yield return () => controller.AttackNearest("HERO");
-        }
-    }
-
-
-    public class RetreatIfIBecomeLeader : IStrategy
-    {
-        public TacticScore RankTactic(TurnState turn)
-        {
-            var myTrash = turn.My.Trash;
-            var inFrontOfAll = myTrash.All(t => turn.My.Hero.IsInFrontOf(t, turn.Game.MyTeam));
-
-            if (inFrontOfAll)
-            {
-                return new TacticScore(this, 1700, "Hero became the leader. Oops.");
-            }
-
-            return TacticScore.DoNotUse;
-        }
-
-        public IEnumerable<Action> RetrieveActions(HeroController controller, TurnState turn, TacticScore tacticScore)
-        {
-            yield return () => controller.Move(turn.My.Tower.X, turn.My.Hero.Y, "Cover me!");
-        }
-    }
-
-    public class KeepAtRange : IStrategy
-    {
-        public TacticScore RankTactic(TurnState turn)
-        {
-            if (turn.My.Hero.IsRanged && turn.My.Hero.AttackRange > turn.Enemy.Hero.AttackRange)
-            {
-                if (turn.My.Hero.DistanceFrom(turn.Enemy.Hero) <= turn.Enemy.Hero.AttackRange)
-                {
-                    return new TacticScore(this, 1700, "Move to out-range the hero.");
-                }
-            }
-
-            return TacticScore.DoNotUse;
-        }
-
-        public IEnumerable<Action> RetrieveActions(HeroController controller, TurnState turn, TacticScore tacticScore)
-        {
-            var targetX = (turn.My.Hero.AttackRange - 1) + turn.Enemy.Hero.X;
-            var targetY = (turn.My.Hero.AttackRange - 1) + turn.Enemy.Hero.Y;
-            yield return () => controller.Move(targetX, targetY, "Back off baby");
-        }
-    }
-
-
-    public class TargetCheapHacks : IStrategy
-    {
-        public TacticScore RankTactic(TurnState turn)
-        {
-            var distanceY = Math.Abs(turn.Enemy.Hero.Y - turn.My.Hero.Y);
-            if (distanceY > 100)
-            {
-                return new TacticScore(this, 3000, "Hero is hiding, let's go kill them");
-            }
-
-            return TacticScore.DoNotUse;
-        }
-
-        public IEnumerable<Action> RetrieveActions(HeroController controller, TurnState turn, TacticScore tacticScore)
-        {
-            yield return () => controller.Attack(turn.Enemy.Hero, "You can't hide from me");
-        }
-    }
-
-
-    public class AttackNearbyEnemiesBasedOnThreat : IStrategy
-    {
-        public TacticScore RankTactic(TurnState turn)
-        {
-            if (turn.My.Hero.HealthPercentage < 20)
-            {
-                return TacticScore.DoNotUse;
-            }
-
-            if (turn.My.Hero.CanAttack(turn.Enemy.Hero))
-            {
-                return TacticScore.DoNotUse;
-            }
-
-            var target = turn.Enemy.UnitsInRangeOf(turn.My.Hero);
-            if (target.Any())
-            {
-                return new TacticScore(this, 65, "Attack close enemies.");
-            }
-
-            return TacticScore.DoNotUse;
-        }
-
-        public IEnumerable<Action> RetrieveActions(HeroController controller, TurnState turn, TacticScore tacticScore)
-        {
-            var target = turn.Enemy.UnitsInRangeOf(turn.My.Hero).Except(turn.Enemy.UnitsInRangeOf(turn.Enemy.Tower));
-
-            if (target.Any())
-            {
-                var threat = new ThreatTable(target);
-                var sorted = threat.OrderBy(x => x.Value);
-                var keyValuePair = sorted.Last();
-                var unit = keyValuePair.Key;
-
-                yield return () => controller.Attack(unit, "Smackdown.");
-            }
-            else
-            {
-                yield return controller.Wait;
-            }
-        }
-    }
-
-    public class AttackHero : IStrategy
-    {
-        public TacticScore RankTactic(TurnState turn)
-        {
-            if (turn.Enemy.Hero.HealthPercentage <= 20)
-            {
-                return new TacticScore(this, int.MaxValue, "Nuke hero, they're weak.");
-            }
-
-            if (turn.Enemy.Hero.CanAttack(turn.My.Hero))
-            {
-                return new TacticScore(this, 55, "Hero is ranged and can attack me, try rush him");
-            }
-
-            return TacticScore.DoNotUse;
-        }
-
-        public IEnumerable<Action> RetrieveActions(HeroController controller, TurnState turn, TacticScore tacticScore)
-        {
-            if (turn.Enemy.Hero.HealthPercentage > 30)
-            {
-                yield return () => controller.AttackNearest("HERO", "FIGHT ME.");
-            }
-            else
-            {
-                yield return () => controller.AttackNearest("HERO", "You die now.");
-            }
-        }
-    }
-
+    
     #region Domain
 
     public class ThreatTable : Dictionary<Unit, int>
@@ -529,12 +210,14 @@ namespace CodingGameBottersOfTheUniverse
         public static UnitCollection ToUnitCollection(this IEnumerable<Unit> src) => new UnitCollection(src);
         public static int FurthestForwards(this IEnumerable<Unit> source, Func<Unit, int> selector, int team)
         {
-            return team == 0 ? source.Select(selector).Max() : source.Select(selector).Min();
+            var enumerable = source.Select(selector).ToList();
+            return team == 0 ? enumerable.Max() : enumerable.Min();
         }
 
         public static int FurthestBackwards(this IEnumerable<Unit> source, Func<Unit, int> selector, int team)
         {
-            return team == 0 ? source.Select(selector).Min() : source.Select(selector).Max();
+            var enumerable = source.Select(selector).ToList();
+            return team == 0 ? enumerable.Min() : enumerable.Max();
         }
     }
 
@@ -587,12 +270,12 @@ namespace CodingGameBottersOfTheUniverse
 
         public bool IsInFrontOf(int x, int y, int team)
         {
-            if (team == 0 && this.X >= x)
+            if (team == 0 && X >= x)
             {
                 return true;
             }
 
-            if (team == 1 && this.X <= x)
+            if (team == 1 && X <= x)
             {
                 return true;
             }
@@ -788,4 +471,62 @@ namespace CodingGameBottersOfTheUniverse
     }
     #endregion
 
+    
+
+    public class MoveWithFrontLine : IStrategy
+    {
+        public TacticScore RankTactic(TurnState turn)
+        {
+            if (turn.My.Hero.HealthPercentage < 10)
+            {
+                return TacticScore.DoNotUse;
+            }
+            
+            return new TacticScore(this, 2000, "Default, move.");
+        }
+
+        public IEnumerable<Action> RetrieveActions(HeroController controller, TurnState turn, TacticScore tacticScore)
+        {
+            var frontLine = turn.My.Trash.FurthestForwards(x => x.X, turn.Game.MyTeam);
+            var leader = turn.My.Trash.FirstOrDefault(x => x.X == frontLine) ?? turn.My.Tower;
+
+            var buffer = turn.My.Hero.AttackRange;
+            buffer *= turn.Game.MyTeam == 0 ? -1 : 1;
+
+            yield return () => controller.Move(leader.X + buffer, leader.Y, "March!");
+        }
+    }
+
+    public class AttackNearbyEnemiesBasedOnThreat : IStrategy
+    {
+        public TacticScore RankTactic(TurnState turn)
+        {
+            var target = turn.Enemy.UnitsInRangeOf(turn.My.Hero);
+            if (target.Any())
+            {
+                return new TacticScore(this, 2010, "Attack close enemies.");
+            }
+
+            return TacticScore.DoNotUse;
+        }
+
+        public IEnumerable<Action> RetrieveActions(HeroController controller, TurnState turn, TacticScore tacticScore)
+        {
+            var target = turn.Enemy.UnitsInRangeOf(turn.My.Hero).Except(turn.Enemy.UnitsInRangeOf(turn.Enemy.Tower));
+
+            if (target.Any())
+            {
+                var threat = new ThreatTable(target);
+                var sorted = threat.OrderBy(x => x.Value);
+                var keyValuePair = sorted.Last();
+                var unit = keyValuePair.Key;
+
+                yield return () => controller.Attack(unit, "Smackdown.");
+            }
+            else
+            {
+                yield return controller.Wait;
+            }
+        }
+    }
 }
